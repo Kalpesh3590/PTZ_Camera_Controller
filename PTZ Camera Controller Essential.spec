@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['PTZ_Camera_Controller_Advanced.py'],
+    ['PTZ_Camera_Controller_Essential.py'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='PTZ Camera Controller Advanced',
+    name='PTZ Camera Controller Essential',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
