@@ -41,18 +41,26 @@ TOOLTIP_DISABLED: Final = "#64748B"
 
 THEMES = {"DARK": {"BG": "#0F172A", "HEADER_BG": "#1E293B", "SECTION_BG": "#172033", "BUTTON_BG": "#334155",
                    "BUTTON_HOVER": "#475569", "BUTTON_ACTIVE": "#2563EB", "BUTTON_PRESSED": "#1D4ED8",
-                   "BORDER": "#475569", "TEXT": "#F8FAFC", "MUTED": "#94A3B8", "DISABLED": "#64748B",
+                   "BORDER": "#64748B", "TEXT": "#FFFFFF", "MUTED": "#CBD5E1", "DISABLED": "#94A3B8",
                    "GREEN": "#22C55E", "YELLOW": "#F59E0B", "RED": "#EF4444", "PRESET_SAVED": "#047857",
                    "PRESET_SAVE_MODE": "#D97706", "TOOLTIP_BG": "#020617", "TOOLTIP_ENABLED": "#3B82F6",
                    "TOOLTIP_DISABLED": "#64748B", "ROW_ALT": "#1B2940", "ON_ACCENT": "#FFFFFF", "ON_WARNING": "#111827",
-                   "DISABLED_BG": "#253247", "DISABLED_FG": "#718096", "INPUT_BG": "#334155"},
+                   "DISABLED_BG": "#273449", "DISABLED_FG": "#A8B3C5", "INPUT_BG": "#243247"},
           "LIGHT": {"BG": "#F3F6FA", "HEADER_BG": "#E2E8F0", "SECTION_BG": "#FFFFFF", "BUTTON_BG": "#D9E2EC",
                     "BUTTON_HOVER": "#C5D2E0", "BUTTON_ACTIVE": "#2563EB", "BUTTON_PRESSED": "#1D4ED8",
-                    "BORDER": "#B7C3D0", "TEXT": "#172033", "MUTED": "#526273", "DISABLED": "#8A98A8",
+                    "BORDER": "#7C8A9A", "TEXT": "#0F172A", "MUTED": "#334155", "DISABLED": "#64748B",
                     "GREEN": "#15803D", "YELLOW": "#B45309", "RED": "#DC2626", "PRESET_SAVED": "#047857",
                     "PRESET_SAVE_MODE": "#C2410C", "TOOLTIP_BG": "#FFFFFF", "TOOLTIP_ENABLED": "#1D4ED8",
                     "TOOLTIP_DISABLED": "#7B8794", "ROW_ALT": "#E8EEF5", "ON_ACCENT": "#FFFFFF",
-                    "ON_WARNING": "#111827", "DISABLED_BG": "#E4EAF1", "DISABLED_FG": "#7F8C9B", "INPUT_BG": "#D6E0EA"}}
+                    "ON_WARNING": "#111827", "DISABLED_BG": "#D9E1EA", "DISABLED_FG": "#526273", "INPUT_BG": "#FFFFFF"},
+          "HIGH_CONTRAST": {"BG": "#0B0F14", "HEADER_BG": "#111820", "SECTION_BG": "#17212B", "BUTTON_BG": "#243342",
+                            "BUTTON_HOVER": "#334A5F", "BUTTON_ACTIVE": "#00AEEB", "BUTTON_PRESSED": "#67D7FF",
+                            "BORDER": "#6F879A", "TEXT": "#FFFFFF", "MUTED": "#D7E2EA", "DISABLED": "#A7B6C3",
+                            "GREEN": "#2EE67A", "YELLOW": "#FFD447", "RED": "#FF6670", "PRESET_SAVED": "#087F4B",
+                            "PRESET_SAVE_MODE": "#FFD447", "TOOLTIP_BG": "#101820", "TOOLTIP_ENABLED": "#67D7FF",
+                            "TOOLTIP_DISABLED": "#A7B6C3", "ROW_ALT": "#1D2A36", "ON_ACCENT": "#061018",
+                            "ON_WARNING": "#151000", "DISABLED_BG": "#2A3540", "DISABLED_FG": "#B5C0CA",
+                            "INPUT_BG": "#0F171F"}}
 
 
 def apply_theme_palette(theme_name: str) -> None:
@@ -67,7 +75,10 @@ def apply_theme_palette(theme_name: str) -> None:
 
 
 def current_palette() -> dict[str, str]:
-    return THEMES["LIGHT"] if BG == THEMES["LIGHT"]["BG"] else THEMES["DARK"]
+    for palette in THEMES.values():
+        if BG == palette["BG"] and BUTTON_ACTIVE == palette["BUTTON_ACTIVE"]:
+            return palette
+    return THEMES["DARK"]
 
 
 def accent_text() -> str:
@@ -96,6 +107,7 @@ ENABLE_DEMO_MODE: Final = True
 RIGHT_MARGIN: Final = 12
 BOTTOM_MARGIN: Final = 58
 PRESET_NUMBERS: Final = range(1, 5)
+CONTROL_MODIFIER_MASK: Final = 0x0004
 PTZ_PROPERTIES: Final = ("pan", "tilt", "zoom")
 PREFERRED_CAMERA_SCORES: Final = {"c1612": 100, "rapoo": 80, "ptz": 40, "conference": 30, "usb video": 10, }
 SPEED_MODES: Final = {"FINE": 1, "NORMAL": 3, "FAST": 6}
@@ -130,31 +142,74 @@ def merged_settings(raw: dict[str, Any] | None) -> dict[str, Any]:
     return result
 
 
+def _bounded_int(value: Any, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError, OverflowError):
+        parsed = default
+    return max(minimum, min(maximum, parsed))
+
+
+def _bounded_float(value: Any, default: float, minimum: float, maximum: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError, OverflowError):
+        parsed = default
+    if parsed != parsed or parsed in {float("inf"), float("-inf")}:
+        parsed = default
+    return max(minimum, min(maximum, parsed))
+
+
+def _parse_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on", "enabled"}:
+            return True
+        if normalized in {"false", "0", "no", "off", "disabled"}:
+            return False
+    if isinstance(value, int) and value in {0, 1}:
+        return bool(value)
+    return default
+
+
 def validate_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    """Return a complete, type-safe settings structure without raising on bad user data."""
     result = merged_settings(settings)
+    defaults = DEFAULT_USER_SETTINGS
+
     general = result["general"]
     general["theme"] = str(general.get("theme", "DARK")).upper()
     if general["theme"] not in THEMES:
         general["theme"] = "DARK"
-    general["opacity"] = max(0.2, min(1.0, float(general["opacity"])))
-    general["hover_boost"] = max(0.0, min(0.5, float(general["hover_boost"])))
-    general["demo_mode"] = bool(general["demo_mode"])
-    general["tooltips_enabled"] = bool(general.get("tooltips_enabled", False))
+    general["opacity"] = _bounded_float(general.get("opacity"), defaults["general"]["opacity"], 0.2, 1.0)
+    general["hover_boost"] = _bounded_float(general.get("hover_boost"), defaults["general"]["hover_boost"], 0.0, 0.5)
+    general["demo_mode"] = _parse_bool(general.get("demo_mode"), defaults["general"]["demo_mode"])
+    general["tooltips_enabled"] = _parse_bool(
+        general.get("tooltips_enabled"), defaults["general"]["tooltips_enabled"]
+    )
+
     manual = result["manual"]
     for key in ("fine_pt", "normal_pt", "fast_pt"):
-        manual[key] = max(1, min(50, int(manual[key])))
+        manual[key] = _bounded_int(manual.get(key), defaults["manual"][key], 1, 50)
     for key in ("fine_zoom", "normal_zoom", "fast_zoom"):
-        manual[key] = max(1, min(5000, int(manual[key])))
-    manual["hold_delay_ms"] = max(50, min(1000, int(manual["hold_delay_ms"])))
-    manual["repeat_interval_ms"] = max(30, min(1000, int(manual["repeat_interval_ms"])))
+        manual[key] = _bounded_int(manual.get(key), defaults["manual"][key], 1, 5000)
+    manual["hold_delay_ms"] = _bounded_int(
+        manual.get("hold_delay_ms"), defaults["manual"]["hold_delay_ms"], 50, 1000
+    )
+    manual["repeat_interval_ms"] = _bounded_int(
+        manual.get("repeat_interval_ms"), defaults["manual"]["repeat_interval_ms"], 30, 1000
+    )
+
     hall = result["hall"]
     for profile in ("cinematic", "slow", "normal", "fast", "return"):
         interval = f"{profile}_interval"
         minimum = f"{profile}_min"
         maximum = f"{profile}_max"
-        hall[interval] = max(20, min(1000, int(hall[interval])))
-        hall[minimum] = max(2, min(200, int(hall[minimum])))
-        hall[maximum] = max(hall[minimum], min(300, int(hall[maximum])))
+        hall[interval] = _bounded_int(hall.get(interval), defaults["hall"][interval], 20, 1000)
+        hall[minimum] = _bounded_int(hall.get(minimum), defaults["hall"][minimum], 2, 200)
+        hall[maximum] = _bounded_int(hall.get(maximum), defaults["hall"][maximum], hall[minimum], 300)
     return result
 
 
@@ -691,6 +746,8 @@ class CompactPTZRemote:
         self.compact_status_dot: tk.Label | None = None
         self.compact_speed_button: tk.Button | None = None
         self.compact_control_buttons: list[tuple[tk.Button, str]] = []
+        self.compact_preset_buttons: dict[int, tk.Button] = {}
+        self.keyboard_feedback_jobs: dict[str, str] = {}
         self.compact_drag_offset_x = 0
         self.compact_drag_offset_y = 0
         self.compact_last_position: tuple[int, int] | None = None
@@ -886,7 +943,7 @@ class CompactPTZRemote:
         window.attributes("-alpha", self.base_opacity)
         window.configure(bg=BORDER)
         window.protocol("WM_DELETE_WINDOW", self.exit_super_compact_mode)
-        window.bind("<Escape>", lambda _event: self.exit_super_compact_mode())
+        window.bind("<Escape>", self.handle_escape)
         window.bind("<FocusOut>", lambda _event: self.stop_hold())
         window.bind("<Enter>", self.compact_pointer_enter, add="+")
         window.bind("<Leave>", self.compact_pointer_leave, add="+")
@@ -908,50 +965,74 @@ class CompactPTZRemote:
         self.compact_status_dot.pack(side="left", padx=(5, 4))
 
         controls = tk.Frame(panel, bg=HEADER_BG)
-        controls.pack(side="left", padx=(0, 3), pady=4)
+        controls.pack(side="left", padx=4, pady=4)
         self.compact_control_buttons = []
+        self.compact_preset_buttons = {}
 
-        def hold_button(text: str, prop: str, direction: int, owner: str) -> tk.Button:
-            button = tk.Button(controls, text=text, width=2, bg=BUTTON_BG, fg=TEXT, activebackground=BUTTON_ACTIVE,
-                               activeforeground=accent_text(), relief="flat", borderwidth=0,
-                               font=("Segoe UI Symbol", 10, "bold"), cursor="hand2", takefocus=False, )
-            button.pack(side="left", padx=1, ipady=2)
+        # Every Super Compact control uses the same cell, width, padding and height.
+        compact_button_width = 3
+        compact_pad_x = 2
+        compact_pad_y = 2
+        compact_internal_y = 3
+
+        def place_button(button: tk.Button, column: int) -> None:
+            button.grid(row=0, column=column, padx=compact_pad_x, pady=compact_pad_y,
+                        ipadx=0, ipady=compact_internal_y, sticky="nsew")
+            controls.grid_columnconfigure(column, weight=1, uniform="compact_button")
+
+        def hold_button(text: str, prop: str, direction: int, owner: str, column: int) -> tk.Button:
+            button = tk.Button(controls, text=text, width=compact_button_width, bg=BUTTON_BG, fg=TEXT,
+                               activebackground=BUTTON_ACTIVE, activeforeground=accent_text(), relief="flat",
+                               borderwidth=0, font=("Segoe UI Symbol", 9, "bold"), cursor="hand2",
+                               takefocus=False)
+            place_button(button, column)
             self.bind_hold_button(button, prop, direction, owner)
-            # A release can occur outside the button/window. This is a final safety net.
             button.bind("<ButtonRelease-1>", lambda _event, token=owner: self.stop_hold(token), add="+")
             self.compact_control_buttons.append((button, prop))
             return button
 
-        hold_button("◀", "pan", -1, "compact:left")
-        hold_button("▲", "tilt", 1, "compact:up")
-        hold_button("▼", "tilt", -1, "compact:down")
-        hold_button("▶", "pan", 1, "compact:right")
-        hold_button("−", "zoom", -1, "compact:zoom_out")
-        hold_button("+", "zoom", 1, "compact:zoom_in")
+        column = 0
+        for text, prop, direction, owner in (
+            ("◀", "pan", -1, "compact:left"),
+            ("▲", "tilt", 1, "compact:up"),
+            ("▼", "tilt", -1, "compact:down"),
+            ("▶", "pan", 1, "compact:right"),
+            ("−", "zoom", -1, "compact:zoom_out"),
+            ("+", "zoom", 1, "compact:zoom_in"),
+        ):
+            hold_button(text, prop, direction, owner, column)
+            column += 1
 
-        for number in (1, 2, 3):
-            button = tk.Button(controls, text=str(number), width=2,
+        for number in PRESET_NUMBERS:
+            button = tk.Button(controls, text=str(number), width=compact_button_width,
                                command=lambda preset=number: self.recall_preset(preset), bg=BUTTON_BG, fg=TEXT,
                                activebackground=PRESET_SAVED, activeforeground=accent_text(), relief="flat",
-                               borderwidth=0, font=("Segoe UI", 8, "bold"), cursor="hand2", takefocus=False, )
-            button.pack(side="left", padx=1, ipady=3)
+                               borderwidth=0, font=("Segoe UI", 8, "bold"), cursor="hand2", takefocus=False)
+            place_button(button, column)
             self.compact_control_buttons.append((button, "preset"))
+            self.compact_preset_buttons[number] = button
+            column += 1
 
-        self.compact_speed_button = tk.Button(controls, text="N", width=2, command=self.cycle_compact_speed,
-                                              bg=BUTTON_ACTIVE, fg=accent_text(), activebackground=BUTTON_PRESSED,
+        self.compact_speed_button = tk.Button(controls, text="N", width=compact_button_width,
+                                              command=self.cycle_compact_speed, bg=BUTTON_ACTIVE,
+                                              fg=accent_text(), activebackground=BUTTON_PRESSED,
                                               activeforeground=accent_text(), relief="flat", borderwidth=0,
-                                              font=("Segoe UI", 8, "bold"), cursor="hand2", takefocus=False, )
-        self.compact_speed_button.pack(side="left", padx=1, ipady=3)
+                                              font=("Segoe UI", 8, "bold"), cursor="hand2", takefocus=False)
+        place_button(self.compact_speed_button, column)
+        column += 1
 
-        restore = tk.Button(controls, text="□", width=2, command=self.exit_super_compact_mode, bg=BUTTON_BG, fg=GREEN,
+        restore = tk.Button(controls, text="□", width=compact_button_width,
+                            command=self.exit_super_compact_mode, bg=BUTTON_BG, fg=GREEN,
                             activebackground=BUTTON_HOVER, activeforeground=TEXT, relief="flat", borderwidth=0,
-                            font=("Segoe UI Symbol", 10, "bold"), cursor="hand2", takefocus=False, )
-        restore.pack(side="left", padx=1, ipady=2)
+                            font=("Segoe UI Symbol", 9, "bold"), cursor="hand2", takefocus=False)
+        place_button(restore, column)
+        column += 1
 
-        close = tk.Button(controls, text="×", width=2, command=self.close_application, bg=HEADER_BG, fg=RED,
-                          activebackground=BUTTON_HOVER, activeforeground=TEXT, relief="flat", borderwidth=0,
-                          font=("Segoe UI Symbol", 10, "bold"), cursor="hand2", takefocus=False, )
-        close.pack(side="left", padx=(1, 2), ipady=2)
+        close = tk.Button(controls, text="×", width=compact_button_width, command=self.close_application,
+                          bg=BUTTON_BG, fg=RED, activebackground=BUTTON_HOVER, activeforeground=TEXT,
+                          relief="flat", borderwidth=0, font=("Segoe UI Symbol", 9, "bold"),
+                          cursor="hand2", takefocus=False)
+        place_button(close, column)
 
         window.update_idletasks()
         self.position_super_compact_window()
@@ -1087,7 +1168,7 @@ class CompactPTZRemote:
 
     def create_camera_row(self) -> None:
         frame = tk.Frame(self.content_frame, bg=BG)
-        frame.pack(fill="x", pady=(0, 4))
+        frame.pack(fill="x", pady=(0, 6))
         self.camera_combo = ttk.Combobox(frame, state="readonly", width=25, style="Compact.TCombobox",
                                          font=("Segoe UI", 8), )
         self.camera_combo.pack(side="left", fill="x", expand=True)
@@ -1097,7 +1178,7 @@ class CompactPTZRemote:
                                         bg=BUTTON_ACTIVE, fg=accent_text(), activebackground=BUTTON_PRESSED,
                                         activeforeground=TEXT, relief="flat", borderwidth=0,
                                         font=("Segoe UI Symbol", 9, "bold"), cursor="hand2", )
-        self.connect_button.pack(side="left", padx=(5, 0), ipady=3)
+        self.connect_button.pack(side="left", padx=(4, 2), ipady=3)
         ToolTip(self.connect_button, "Connect or reconnect selected camera")
         self.camera_info_button = tk.Button(frame, text="ℹ", command=self.toggle_camera_info, width=3, bg=BUTTON_BG,
                                             fg=MUTED, activebackground=BUTTON_ACTIVE, activeforeground=TEXT,
@@ -1110,16 +1191,16 @@ class CompactPTZRemote:
 
     def create_ptz_section(self) -> None:
         frame = tk.Frame(self.content_frame, bg=SECTION_BG)
-        frame.pack(fill="x", pady=(0, 4))
+        frame.pack(fill="x", pady=(0, 6))
         pad = tk.Frame(frame, bg=SECTION_BG)
-        pad.pack(pady=5)
+        pad.pack(padx=6, pady=6)
         self.up_button = self.create_hold_button(pad, "▲", 0, 1, "tilt", 1, "Tilt camera up")
         self.left_button = self.create_hold_button(pad, "◀", 1, 0, "pan", -1, "Pan camera left")
         self.home_button = tk.Button(pad, text="⌂", command=self.go_home, width=4, height=1, bg=BUTTON_ACTIVE,
                                      fg="#FACC15", disabledforeground=DISABLED, activebackground=BUTTON_PRESSED,
                                      activeforeground="#FACC15", relief="flat", borderwidth=0,
                                      font=("Segoe UI Symbol", 12, "bold"), cursor="hand2", state="disabled", )
-        self.home_button.grid(row=1, column=1, padx=3, pady=3, ipady=3)
+        self.home_button.grid(row=1, column=1, padx=4, pady=4, ipady=3)
         ToolTip(self.home_button, "Move Pan and Tilt to Home")
         self.right_button = self.create_hold_button(pad, "▶", 1, 2, "pan", 1, "Pan camera right")
         self.down_button = self.create_hold_button(pad, "▼", 2, 1, "tilt", -1, "Tilt camera down")
@@ -1129,7 +1210,7 @@ class CompactPTZRemote:
         button = tk.Button(parent, text=text, width=4, height=1, bg=BUTTON_BG, fg=TEXT, disabledforeground=DISABLED,
                            activebackground=BUTTON_ACTIVE, activeforeground=TEXT, relief="flat", borderwidth=0,
                            font=("Segoe UI Symbol", 11, "bold"), cursor="hand2", state="disabled", )
-        button.grid(row=row, column=column, padx=3, pady=3, ipady=3)
+        button.grid(row=row, column=column, padx=4, pady=4, ipady=3)
         owner = f"mouse:{property_name}:{direction}"
         self.bind_hold_button(button, property_name, direction, owner)
         ToolTip(button, tooltip_text + "\nPress and hold")
@@ -1137,7 +1218,7 @@ class CompactPTZRemote:
 
     def create_zoom_section(self) -> None:
         frame = tk.Frame(self.content_frame, bg=SECTION_BG)
-        frame.pack(fill="x", pady=(0, 4))
+        frame.pack(fill="x", pady=(0, 6))
         self.zoom_out_button = self.create_zoom_button(frame, "−", -1, "Zoom out")
         self.zoom_out_button.pack(side="left", fill="x", expand=True, padx=(7, 3), pady=6, ipady=3)
         label = tk.Label(frame, text="ZOOM", bg=SECTION_BG, fg=MUTED, width=7, font=("Segoe UI", 7, "bold"), )
@@ -1156,7 +1237,7 @@ class CompactPTZRemote:
 
     def create_speed_section(self) -> None:
         frame = tk.Frame(self.content_frame, bg=BG)
-        frame.pack(fill="x", pady=(0, 4))
+        frame.pack(fill="x", pady=(0, 6))
         label = tk.Label(frame, text="SPEED", bg=BG, fg=MUTED, font=("Segoe UI", 7, "bold"), )
         label.pack(side="left", padx=(1, 5))
         ToolTip(label, "Movement amount per command")
@@ -1168,14 +1249,14 @@ class CompactPTZRemote:
             button = tk.Button(frame, text=display_text, command=lambda selected=code: self.set_speed(selected),
                                bg=BUTTON_BG, fg=MUTED, activebackground=BUTTON_ACTIVE, activeforeground=TEXT,
                                relief="flat", borderwidth=0, font=("Segoe UI", 7, "bold"), cursor="hand2", )
-            button.pack(side="left", fill="x", expand=True, padx=1, ipady=3)
+            button.pack(side="left", fill="x", expand=True, padx=2, ipady=3)
             self.speed_buttons[code] = button
             ToolTip(button, tooltip_text)
         self.update_speed_buttons()
 
     def create_preset_section(self) -> None:
         frame = tk.Frame(self.content_frame, bg=BG)
-        frame.pack(fill="x", pady=(0, 4))
+        frame.pack(fill="x", pady=(0, 6))
         label = tk.Label(frame, text="PRESETS", bg=BG, fg=MUTED, font=("Segoe UI", 7, "bold"), )
         label.pack(side="left", padx=(1, 4))
         ToolTip(label, "Saved Pan, Tilt and Zoom positions")
@@ -1185,41 +1266,40 @@ class CompactPTZRemote:
                                width=3, bg=BUTTON_BG, fg=TEXT, disabledforeground=DISABLED,
                                activebackground=BUTTON_ACTIVE, activeforeground=TEXT, relief="flat", borderwidth=0,
                                font=("Segoe UI", 8, "bold"), cursor="hand2", state="disabled", )
-            button.pack(side="left", fill="x", expand=True, padx=1, ipady=3)
-            button.bind("<Button-3>", lambda _event, selected=number: self.save_preset(selected), )
-            ToolTip(button, f"Preset {number}\nLeft-click: recall\nRight-click: save", )
+            button.pack(side="left", fill="x", expand=True, padx=2, ipady=3)
+            ToolTip(button, f"Preset {number}\nClick to recall\nTo save: click SAVE, then this preset", )
             self.preset_buttons.append(button)
         self.save_button = tk.Button(frame, text="SAVE", command=self.toggle_save_mode, width=5, bg=BUTTON_BG, fg=TEXT,
                                      disabledforeground=DISABLED, activebackground=BUTTON_ACTIVE, activeforeground=TEXT,
                                      relief="flat", borderwidth=0, font=("Segoe UI", 7, "bold"), cursor="hand2",
                                      state="disabled", )
-        self.save_button.pack(side="left", padx=(3, 0), ipady=3)
+        self.save_button.pack(side="left", padx=2, ipady=3)
         ToolTip(self.save_button, "Click SAVE, then select preset 1 to 4")
 
     def create_hall_section(self) -> None:
         frame = tk.Frame(self.content_frame, bg=BG)
-        frame.pack(fill="x", pady=(0, 4))
+        frame.pack(fill="x", pady=(0, 6))
         tk.Label(frame, text="HALL", bg=BG, fg=MUTED, font=("Segoe UI", 7, "bold")).pack(side="left", padx=(1, 4))
         self.map_hall_button = tk.Button(frame, text="MAP", command=self.open_hall_wizard, bg=BUTTON_BG, fg=TEXT,
                                          disabledforeground=DISABLED, activebackground=BUTTON_ACTIVE,
                                          activeforeground=TEXT, relief="flat", borderwidth=0,
                                          font=("Segoe UI", 7, "bold"), cursor="hand2", state="disabled")
-        self.map_hall_button.pack(side="left", fill="x", expand=True, padx=1, ipady=3)
+        self.map_hall_button.pack(side="left", fill="x", expand=True, padx=2, ipady=3)
         self.show_hall_button = tk.Button(frame, text="SHOW", command=self.show_hall_once, bg=BUTTON_ACTIVE,
                                           fg=accent_text(), disabledforeground=DISABLED,
                                           activebackground=BUTTON_PRESSED, activeforeground=TEXT, relief="flat",
                                           borderwidth=0, font=("Segoe UI", 7, "bold"), cursor="hand2", state="disabled")
-        self.show_hall_button.pack(side="left", fill="x", expand=True, padx=1, ipady=3)
+        self.show_hall_button.pack(side="left", fill="x", expand=True, padx=2, ipady=3)
         self.pause_hall_button = tk.Button(frame, text="PAUSE", command=self.toggle_hall_pause, bg=YELLOW,
                                            fg=warning_text(), disabledforeground=DISABLED, activebackground="#FBBF24",
                                            activeforeground=BG, relief="flat", borderwidth=0,
                                            font=("Segoe UI", 7, "bold"), cursor="hand2", state="disabled")
-        self.pause_hall_button.pack(side="left", fill="x", expand=True, padx=1, ipady=3)
+        self.pause_hall_button.pack(side="left", fill="x", expand=True, padx=2, ipady=3)
         self.stop_hall_button = tk.Button(frame, text="STOP", command=self.stop_hall_playback, bg=RED, fg=accent_text(),
                                           disabledforeground=DISABLED, activebackground="#DC2626",
                                           activeforeground=TEXT, relief="flat", borderwidth=0,
                                           font=("Segoe UI", 7, "bold"), cursor="hand2", state="disabled")
-        self.stop_hall_button.pack(side="left", fill="x", expand=True, padx=1, ipady=3)
+        self.stop_hall_button.pack(side="left", fill="x", expand=True, padx=2, ipady=3)
         ToolTip(self.map_hall_button, "Open the hall mapping wizard")
         ToolTip(self.show_hall_button, "Run the saved Hall route")
         ToolTip(self.pause_hall_button, "Pause or resume Hall route playback")
@@ -1515,8 +1595,6 @@ class CompactPTZRemote:
         self.active_settings_canvas = None
         try:
             self.root.unbind_all("<MouseWheel>")
-            self.root.bind_all("<KeyPress>", self.keyboard_pressed, add="+")
-            self.root.bind_all("<KeyRelease>", self.keyboard_released, add="+")
         except tk.TclError:
             pass
 
@@ -1563,8 +1641,8 @@ class CompactPTZRemote:
         theme_variable = tk.StringVar(value=str(self.user_settings["general"].get("theme", "DARK")))
         self.settings_variables["general.theme"] = theme_variable
         self.settings_theme_buttons = {}
-        for theme_name in ("DARK", "LIGHT"):
-            button = tk.Button(theme_row, text=theme_name.title(),
+        for theme_name in ("DARK", "LIGHT", "HIGH_CONTRAST"):
+            button = tk.Button(theme_row, text=theme_name.replace("_", " ").title(),
                                command=lambda selected=theme_name: self.select_settings_theme(selected), bg=BUTTON_BG,
                                fg=MUTED, activebackground=BUTTON_ACTIVE, activeforeground=TEXT, relief="flat",
                                borderwidth=0, font=("Segoe UI", 8, "bold"), cursor="hand2", width=10, pady=6)
@@ -1685,7 +1763,7 @@ class CompactPTZRemote:
         tk.Label(hall, text=hall_text, bg=SECTION_BG, fg=TEXT, justify="left", anchor="nw", wraplength=270,
                  font=("Segoe UI", 8)).pack(fill="x", padx=12, pady=(2, 11))
 
-        keyboard = self.settings_card(left, "KEYBOARD CONTROLS", "Main controller must have focus")
+        keyboard = self.settings_card(left, "KEYBOARD CONTROLS", "Works in full and Super Compact modes")
         keyboard_text = ("Arrow keys: Pan and Tilt\n"
                          "+, = or Numpad +: Zoom In\n"
                          "- or Numpad -: Zoom Out\n"
@@ -1698,7 +1776,7 @@ class CompactPTZRemote:
         troubleshooting_text = (
             "Camera not listed\nClose other camera applications, reconnect USB and click Refresh.\n\n"
             "Controls are disabled\nOpen Camera Info and confirm Pan, Tilt or Zoom support.\n\n"
-            "Keyboard does not respond\nClick the main controller once. Shortcuts are blocked while editing settings.\n\n"
+            "Keyboard does not respond\nClick either controller surface once. Shortcuts are blocked only while editing fields or dialogs.\n\n"
             "Hall route does not pause\nSelect a point, choose 1 to 5 seconds, save the map and restart the test.\n\n"
             "Camera stops responding\nPress Esc, stop Hall playback, reconnect the camera and refresh the list.")
         tk.Label(troubleshooting, text=troubleshooting_text, bg=SECTION_BG, fg=TEXT, justify="left", anchor="nw",
@@ -1836,6 +1914,10 @@ class CompactPTZRemote:
         except (ValueError, TypeError, tk.TclError) as error:
             messagebox.showerror("Invalid settings", str(error), parent=self.settings_window)
             return
+
+        settings = validate_settings(settings)
+        if settings["general"]["theme"] == "HIGH_CONTRAST":
+            settings["general"]["opacity"] = max(0.90, float(settings["general"]["opacity"]))
 
         previous_settings = validate_settings(self.user_settings)
         theme_changed = previous_settings["general"]["theme"] != settings["general"]["theme"]
@@ -2311,6 +2393,83 @@ class CompactPTZRemote:
 
         self.schedule_theme_normalization(self.root)
 
+    def movement_buttons_for(self, property_name: str, direction: int) -> list[tk.Button]:
+        """Return matching controls from both the normal and Super Compact surfaces."""
+        main_map = {
+            ("pan", -1): getattr(self, "left_button", None),
+            ("pan", 1): getattr(self, "right_button", None),
+            ("tilt", 1): getattr(self, "up_button", None),
+            ("tilt", -1): getattr(self, "down_button", None),
+            ("zoom", -1): getattr(self, "zoom_out_button", None),
+            ("zoom", 1): getattr(self, "zoom_in_button", None),
+        }
+        buttons = [main_map.get((property_name, direction))]
+        compact_index = {
+            ("pan", -1): 0, ("tilt", 1): 1, ("tilt", -1): 2,
+            ("pan", 1): 3, ("zoom", -1): 4, ("zoom", 1): 5,
+        }.get((property_name, direction))
+        if compact_index is not None and compact_index < len(self.compact_control_buttons):
+            buttons.append(self.compact_control_buttons[compact_index][0])
+        return [button for button in buttons if button is not None and button.winfo_exists()]
+
+    def set_movement_feedback(self, property_name: str, direction: int, active: bool) -> None:
+        palette = current_palette()
+        for button in self.movement_buttons_for(property_name, direction):
+            try:
+                if active:
+                    button.config(bg=BUTTON_PRESSED, fg=palette["ON_ACCENT"])
+                else:
+                    button.config(bg=BUTTON_BG, fg=TEXT)
+            except tk.TclError:
+                continue
+
+    def flash_action_buttons(self, buttons: list[tk.Button], token: str, duration_ms: int = 180) -> None:
+        """Mirror one-shot keyboard actions on every visible controller surface."""
+        palette = current_palette()
+        self.cancel_job(f"feedback:{token}")
+        original_colours: list[tuple[tk.Button, str, str]] = []
+        for button in buttons:
+            try:
+                if button is not None and button.winfo_exists():
+                    original_colours.append((button, str(button.cget("bg")), str(button.cget("fg"))))
+                    button.config(bg=BUTTON_PRESSED, fg=palette["ON_ACCENT"])
+            except tk.TclError:
+                continue
+
+        def restore() -> None:
+            for button, background, foreground in original_colours:
+                try:
+                    if button.winfo_exists():
+                        button.config(bg=background, fg=foreground)
+                except tk.TclError:
+                    pass
+
+        self.schedule_job(f"feedback:{token}", duration_ms, restore)
+
+    def set_preset_keyboard_feedback(self, number: int, active: bool) -> None:
+        """Highlight only the pressed preset and restore canonical preset colours on release."""
+        if not active:
+            self.update_preset_colours()
+            return
+        palette = current_palette()
+        # First normalize every preset so an earlier highlight can never remain stuck.
+        self.update_preset_colours()
+        for button in self.preset_feedback_buttons(number):
+            try:
+                if button.winfo_exists() and str(button.cget("state")) != "disabled":
+                    button.config(bg=BUTTON_PRESSED, fg=palette["ON_ACCENT"])
+            except tk.TclError:
+                continue
+
+    def preset_feedback_buttons(self, number: int) -> list[tk.Button]:
+        buttons: list[tk.Button] = []
+        if 1 <= number <= len(getattr(self, "preset_buttons", [])):
+            buttons.append(self.preset_buttons[number - 1])
+        compact_button = self.compact_preset_buttons.get(number)
+        if compact_button is not None:
+            buttons.append(compact_button)
+        return buttons
+
     def bind_hold_button(self, button: tk.Button, property_name: str, direction: int, owner: str, ) -> None:
         button.bind("<ButtonPress-1>", lambda _event: self.start_hold(property_name, direction, owner), )
         button.bind("<ButtonRelease-1>", lambda _event: self.stop_hold(owner))
@@ -2323,6 +2482,7 @@ class CompactPTZRemote:
         if property_name not in self.ranges:
             return
         self.active_hold = HoldAction(property_name, direction, owner)
+        self.set_movement_feedback(property_name, direction, True)
         self.write_log(self.get_active_message(property_name, direction), TEXT)
         self.move_active_hold()
 
@@ -2364,8 +2524,10 @@ class CompactPTZRemote:
             return
         previous = self.active_hold
         self.active_hold = None
-        if previous is None or previous.owner.startswith("key:"):
-            self.pressed_keyboard_keys.clear()
+        if previous is not None:
+            self.set_movement_feedback(previous.property_name, previous.direction, False)
+        if previous is not None and previous.owner.startswith("key:"):
+            self.pressed_keyboard_keys.discard(previous.owner.removeprefix("key:"))
         self.cancel_job("repeat")
         self.jobs.pop("repeat_started", None)
         if previous is not None:
@@ -2536,6 +2698,17 @@ class CompactPTZRemote:
             else:
                 button.config(bg=BUTTON_BG, fg=TEXT, activebackground=BUTTON_ACTIVE,
                               activeforeground=palette["ON_ACCENT"], )
+
+        for number, button in self.compact_preset_buttons.items():
+            if not available:
+                button.config(state="disabled", bg=palette["DISABLED_BG"], fg=palette["DISABLED_FG"],
+                              disabledforeground=palette["DISABLED_FG"])
+            elif number in saved:
+                button.config(state="normal", bg=PRESET_SAVED, fg=palette["ON_ACCENT"],
+                              activebackground=GREEN, activeforeground=palette["ON_ACCENT"])
+            else:
+                button.config(state="normal", bg=BUTTON_BG, fg=TEXT,
+                              activebackground=BUTTON_ACTIVE, activeforeground=palette["ON_ACCENT"])
 
         if not available:
             self.save_button.config(bg=palette["DISABLED_BG"], fg=palette["DISABLED_FG"],
@@ -3386,18 +3559,41 @@ class CompactPTZRemote:
                 break
         return False
 
-    def main_controller_has_focus(self) -> bool:
+    def controller_surface_has_focus(self) -> bool:
+        """Return True when either controller surface owns keyboard focus."""
         try:
             focused = self.root.focus_get()
-            return focused is not None and focused.winfo_toplevel() is self.root
+            if focused is None:
+                return False
+            top_level = focused.winfo_toplevel()
+            if top_level is self.root:
+                return True
+            return (
+                self.compact_window is not None
+                and self.compact_window.winfo_exists()
+                and top_level is self.compact_window
+            )
         except tk.TclError:
             return False
+
+    def main_controller_has_focus(self) -> bool:
+        """Backward-compatible alias for older internal callers."""
+        return self.controller_surface_has_focus()
+
+    @staticmethod
+    def control_modifier_pressed(event: tk.Event) -> bool:
+        """Use Tk's platform-stable Control modifier bit."""
+        return bool(int(getattr(event, "state", 0)) & CONTROL_MODIFIER_MASK)
 
     def activate_keyboard_control(self, event: tk.Event | None = None) -> None:
         if event is not None and self.keyboard_input_widget(event.widget):
             return
         try:
-            self.root.focus_force()
+            target = self.compact_window
+            if target is not None and target.winfo_exists() and target.state() != "withdrawn":
+                target.focus_force()
+            else:
+                self.root.focus_force()
         except tk.TclError:
             pass
 
@@ -3407,42 +3603,75 @@ class CompactPTZRemote:
         self.schedule_job("keyboard_focus", 30, self.activate_keyboard_control)
 
     def keyboard_focus_lost(self, _event: tk.Event | None = None) -> None:
+        had_preset_key = bool(self.pressed_keyboard_keys & {"1", "2", "3", "4"})
         self.pressed_keyboard_keys.clear()
+        if had_preset_key:
+            self.update_preset_colours()
         if self.active_hold is not None and self.active_hold.owner.startswith("key:"):
             self.stop_hold()
 
-    def movement_key_map(self) -> dict[str, tuple[str, int]]:
-        return {"Left": ("pan", -1), "Right": ("pan", 1), "Up": ("tilt", 1), "Down": ("tilt", -1), "plus": ("zoom", 1),
-                "equal": ("zoom", 1), "KP_Add": ("zoom", 1), "minus": ("zoom", -1), "KP_Subtract": ("zoom", -1), }
+    @staticmethod
+    def movement_key_map() -> dict[str, tuple[str, int]]:
+        return {
+            "Left": ("pan", -1),
+            "Right": ("pan", 1),
+            "Up": ("tilt", 1),
+            "Down": ("tilt", -1),
+            "plus": ("zoom", 1),
+            "equal": ("zoom", 1),
+            "KP_Add": ("zoom", 1),
+            "minus": ("zoom", -1),
+            "KP_Subtract": ("zoom", -1),
+        }
 
     def keyboard_pressed(self, event: tk.Event) -> str | None:
-        if self.keyboard_input_widget(event.widget) or not self.main_controller_has_focus():
+        """Dispatch shortcuts consistently for full and Super Compact modes."""
+        if self.keyboard_input_widget(event.widget) or not self.controller_surface_has_focus():
             return None
+
+        keysym = str(event.keysym)
+        if keysym == "Escape":
+            return self.handle_escape(event)
+
         movement = self.movement_key_map()
-        if event.keysym in movement:
-            if event.keysym in self.pressed_keyboard_keys:
+        if keysym in movement:
+            if keysym in self.pressed_keyboard_keys:
                 return "break"
-            property_name, direction = movement[event.keysym]
+            property_name, direction = movement[keysym]
             if property_name not in self.supported_properties:
                 return "break"
-            self.pressed_keyboard_keys.add(event.keysym)
-            self.start_hold(property_name, direction, f"key:{event.keysym}")
+            self.pressed_keyboard_keys.add(keysym)
+            self.start_hold(property_name, direction, f"key:{keysym}")
             return "break"
-        if event.keysym.lower() == "h":
+
+        if keysym.lower() == "h":
             if {"pan", "tilt"} & self.supported_properties:
+                self.flash_action_buttons([getattr(self, "home_button", None)], "home")
                 self.go_home()
             return "break"
-        if event.keysym in {"1", "2", "3", "4"}:
-            preset_number = int(event.keysym)
-            if event.state & 0x0004:
+
+        if keysym in {"1", "2", "3", "4"}:
+            if keysym in self.pressed_keyboard_keys:
+                return "break"
+            self.pressed_keyboard_keys.add(keysym)
+            preset_number = int(keysym)
+            self.set_preset_keyboard_feedback(preset_number, True)
+            if self.control_modifier_pressed(event):
                 self.save_preset(preset_number)
             else:
-                self.preset_clicked(preset_number)
+                self.recall_preset(preset_number)
             return "break"
+
         return None
 
-    def keyboard_released(self, event: tk.Event) -> None:
-        self.stop_hold(f"key:{event.keysym}")
+    def keyboard_released(self, event: tk.Event) -> str | None:
+        keysym = str(event.keysym)
+        self.pressed_keyboard_keys.discard(keysym)
+        if keysym in {"1", "2", "3", "4"}:
+            self.set_preset_keyboard_feedback(int(keysym), False)
+            return "break"
+        self.stop_hold(f"key:{keysym}")
+        return "break" if keysym in self.movement_key_map() else None
 
     def schedule_job(self, name: str, delay_ms: int, callback: Callable[[], None], ) -> None:
         self.cancel_job(name)
