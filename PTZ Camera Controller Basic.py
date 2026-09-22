@@ -20,33 +20,59 @@ try:
 except ImportError:
     duvc = None
 
-APP_BACKGROUND_COLOR: Final = "#0F1115"
-HEADER_BACKGROUND_COLOR: Final = "#181A1F"
-SECTION_BACKGROUND_COLOR: Final = "#15171C"
-BUTTON_BACKGROUND_COLOR: Final = "#292C33"
-BUTTON_HOVER_COLOR: Final = "#383C45"
-PRIMARY_ACTION_COLOR: Final = "#0F6CBD"
-PRIMARY_ACTION_PRESSED_COLOR: Final = "#115EA3"
-BORDER_COLOR: Final = "#666B73"
-PRIMARY_TEXT_COLOR: Final = "#FFFFFF"
-SECONDARY_TEXT_COLOR: Final = "#D0D2D6"
-DISABLED_TEXT_COLOR: Final = "#777A82"
-SUCCESS_COLOR: Final = "#54B054"
-WARNING_COLOR: Final = "#F5C242"
-ERROR_COLOR: Final = "#F1707B"
-INFORMATION_COLOR: Final = "#60CDFF"
-CLOSE_HOVER_COLOR: Final = "#C42B1C"
-SAVED_PRESET_COLOR: Final = "#107C10"
-PRESET_SAVE_MODE_COLOR: Final = "#9A6700"
-TOOLTIP_BACKGROUND_COLOR: Final = "#202226"
-TOOLTIP_ENABLED_COLOR: Final = INFORMATION_COLOR
-TOOLTIP_DISABLED_COLOR: Final = DISABLED_TEXT_COLOR
+# Theme palettes. The dark palette deliberately uses layered blue-grey surfaces
+# rather than pure black, which keeps the compact utility readable and less harsh.
+LIGHT_THEME: Final = {
+    "app_bg": "#F3F6FA", "header_bg": "#E7EEF7", "section_bg": "#FFFFFF",
+    "button_bg": "#E8EEF5", "button_hover": "#D6E4F5",
+    "primary_action": "#2563EB", "primary_action_pressed": "#1D4ED8",
+    "border": "#CBD5E1", "primary_text": "#172033", "action_text": "#FFFFFF",
+    "secondary_text": "#526277", "disabled_text": "#94A3B8",
+    "success": "#15803D", "warning": "#B45309", "error": "#B91C1C",
+    "information": "#0369A1", "close_hover": "#DC2626",
+    "saved_preset": "#16A34A", "preset_save": "#D97706",
+    "tooltip_bg": "#172033", "tooltip_text": "#F8FAFC",
+}
+DARK_THEME: Final = {
+    "app_bg": "#18212F", "header_bg": "#222E3E", "section_bg": "#263446",
+    "button_bg": "#314156", "button_hover": "#3D5068",
+    "primary_action": "#4F8EF7", "primary_action_pressed": "#3B76D9",
+    "border": "#43546B", "primary_text": "#EDF3FA", "action_text": "#FFFFFF",
+    "secondary_text": "#B6C3D3", "disabled_text": "#718096",
+    "success": "#4ADE80", "warning": "#FBBF24", "error": "#FB7185",
+    "information": "#60A5FA", "close_hover": "#E05263",
+    "saved_preset": "#22C55E", "preset_save": "#F59E0B",
+    "tooltip_bg": "#101722", "tooltip_text": "#F8FAFC",
+}
 
+# Active palette values are kept as module globals because the existing UI uses
+# these semantic names throughout. apply_theme() updates them atomically.
+APP_BACKGROUND_COLOR = LIGHT_THEME["app_bg"]
+HEADER_BACKGROUND_COLOR = LIGHT_THEME["header_bg"]
+SECTION_BACKGROUND_COLOR = LIGHT_THEME["section_bg"]
+BUTTON_BACKGROUND_COLOR = LIGHT_THEME["button_bg"]
+BUTTON_HOVER_COLOR = LIGHT_THEME["button_hover"]
+PRIMARY_ACTION_COLOR = LIGHT_THEME["primary_action"]
+PRIMARY_ACTION_PRESSED_COLOR = LIGHT_THEME["primary_action_pressed"]
+BORDER_COLOR = LIGHT_THEME["border"]
+PRIMARY_TEXT_COLOR = LIGHT_THEME["primary_text"]
+ACTION_TEXT_COLOR = LIGHT_THEME["action_text"]
+SECONDARY_TEXT_COLOR = LIGHT_THEME["secondary_text"]
+DISABLED_TEXT_COLOR = LIGHT_THEME["disabled_text"]
+SUCCESS_COLOR = LIGHT_THEME["success"]
+WARNING_COLOR = LIGHT_THEME["warning"]
+ERROR_COLOR = LIGHT_THEME["error"]
+INFORMATION_COLOR = LIGHT_THEME["information"]
+CLOSE_HOVER_COLOR = LIGHT_THEME["close_hover"]
+SAVED_PRESET_COLOR = LIGHT_THEME["saved_preset"]
+PRESET_SAVE_MODE_COLOR = LIGHT_THEME["preset_save"]
+TOOLTIP_BACKGROUND_COLOR = LIGHT_THEME["tooltip_bg"]
+TOOLTIP_TEXT_COLOR = LIGHT_THEME["tooltip_text"]
+TOOLTIP_ENABLED_COLOR = INFORMATION_COLOR
+TOOLTIP_DISABLED_COLOR = DISABLED_TEXT_COLOR
 APP_TITLE: Final = "PTZ Remote"
 DEFAULT_OPACITY: Final = 1.0
 OPACITY_VALUES: Final = (1.00, 0.85, 0.70, 0.55, 0.40, 0.30, 0.20)
-INITIAL_HOLD_DELAY_MS: Final = 120
-REPEAT_INTERVAL_MS: Final = 90
 POSITION_REFRESH_DELAY_MS: Final = 300
 PRESET_COMMAND_DELAY_MS: Final = 100
 WORKER_POLL_INTERVAL_MS: Final = 30
@@ -55,8 +81,32 @@ BOTTOM_MARGIN: Final = 58
 PRESET_NUMBERS: Final = range(1, 5)
 PTZ_PROPERTIES: Final = ("pan", "tilt", "zoom")
 PREFERRED_CAMERA_SCORES: Final = {"c1612": 100, "rapoo": 80, "ptz": 40, "conference": 30, "usb video": 10, }
-SPEED_MODES: Final = {"FINE": 1, "NORMAL": 3, "FAST": 6}
-RANGE_SPEED_PERCENT: Final = {"FINE": 0.01, "NORMAL": 0.03, "FAST": 0.08}
+SPEED_MODES: Final = ("FINE", "NORMAL", "FAST")
+
+# Pan and tilt use hardware-step multipliers for precision.
+PT_STEP_MULTIPLIERS: Final = {
+    "pan": {"FINE": 1, "NORMAL": 3, "FAST": 8},
+    "tilt": {"FINE": 1, "NORMAL": 3, "FAST": 6},
+}
+
+# Zoom is intentionally independent. A percentage of its own range gives a
+# useful visible change even when the camera reports a very small zoom step.
+ZOOM_RANGE_PERCENTAGES: Final = {
+    "FINE": 0.01,
+    "NORMAL": 0.03,
+    "FAST": 0.08,
+}
+
+PT_HOLD_TIMING_MS: Final = {
+    "FINE": {"initial": 300, "repeat": 180},
+    "NORMAL": {"initial": 220, "repeat": 110},
+    "FAST": {"initial": 160, "repeat": 65},
+}
+ZOOM_HOLD_TIMING_MS: Final = {
+    "FINE": {"initial": 250, "repeat": 120},
+    "NORMAL": {"initial": 180, "repeat": 75},
+    "FAST": {"initial": 120, "repeat": 45},
+}
 EXTRA_SMALL_SPACING: Final = 3
 SMALL_SPACING: Final = 5
 MEDIUM_SPACING: Final = 8
@@ -116,6 +166,14 @@ class CameraSnapshot:
     camera_name: str
     ranges: dict[str, PropertyRange]
     position: PTZPosition
+
+@dataclass(frozen=True)
+class MovementResult:
+    property_name: str
+    requested_value: int
+    actual_value: int
+    delta: int
+    at_limit: bool
 
 
 @dataclass(frozen=True)
@@ -308,24 +366,55 @@ class CameraService:
         self.position.set(property_name, aligned_value)
         return aligned_value
 
-    def move(self, property_name: str, direction: int, speed_mode: str) -> int:
+    def move(self, property_name: str, direction: int, speed_mode: str) -> MovementResult:
         self._validate_property(property_name)
         if direction not in (-1, 1):
             raise ValueError("Movement direction must be -1 or 1")
-        if speed_mode not in RANGE_SPEED_PERCENT:
+        if speed_mode not in SPEED_MODES:
             raise ValueError(f"Unknown speed mode: {speed_mode}")
+
         current_value = self.position.get(property_name)
         if current_value is None:
             try:
                 current_value = int(getattr(self.controller, property_name))
             except Exception as error:
-                raise CameraPropertyError(f"Unable to read {property_name}: {error}") from error
+                raise CameraPropertyError(
+                    f"Unable to read {property_name}: {error}"
+                ) from error
             self.position.set(property_name, current_value)
+
         info = self.ranges[property_name]
-        span = max(info.step, info.maximum - info.minimum)
-        raw_delta = max(info.step, round(span * RANGE_SPEED_PERCENT[speed_mode]))
-        movement = max(info.step, round(raw_delta / info.step) * info.step)
-        return self.set_value(property_name, current_value + direction * movement)
+        if property_name == "zoom":
+            span = max(info.step, info.maximum - info.minimum)
+            raw_movement = max(
+                info.step,
+                round(span * ZOOM_RANGE_PERCENTAGES[speed_mode]),
+            )
+            movement = max(
+                info.step,
+                round(raw_movement / info.step) * info.step,
+            )
+        else:
+            movement = info.step * PT_STEP_MULTIPLIERS[property_name][speed_mode]
+
+        requested_value = current_value + direction * movement
+        target_value = info.align(requested_value)
+        if target_value == current_value:
+            return MovementResult(
+                property_name, requested_value, current_value, 0, True
+            )
+
+        actual_value = self.set_value(property_name, target_value)
+        delta = actual_value - current_value
+        at_limit = actual_value in (info.minimum, info.maximum)
+        logger.debug(
+            "%s %s: current=%s hardware_step=%s movement=%s requested=%s actual=%s delta=%s limit=%s",
+            property_name, speed_mode, current_value, info.step, movement,
+            requested_value, actual_value, delta, at_limit,
+        )
+        return MovementResult(
+            property_name, requested_value, actual_value, delta, at_limit
+        )
 
     def home_commands(self) -> list[tuple[str, int]]:
         commands: list[tuple[str, int]] = []
@@ -381,14 +470,13 @@ class CameraWorker:
         self._lock = threading.Lock()
         self._current_generation = 0
         self._stopping = threading.Event()
-        self.thread = threading.Thread(target=self._run, name="PTZCameraWorker", daemon=False)
+        self.thread = threading.Thread(target=self._run, name="PTZCameraWorker", daemon=True)
         self.thread.start()
 
-    def set_generation(self, generation: int, purge: bool = True) -> None:
+    def set_generation(self, generation: int, purge: bool = True) -> list[int]:
         with self._lock:
             self._current_generation = generation
-        if purge:
-            self.clear_pending()
+        return self.clear_pending() if purge else []
 
     def submit(self, request_id: int, generation: int, operation: str, action: Callable[[], Any]) -> bool:
         if self._stopping.is_set():
@@ -401,15 +489,17 @@ class CameraWorker:
             logger.warning("Camera queue full; rejected %s", operation)
             return False
 
-    def clear_pending(self) -> None:
+    def clear_pending(self) -> list[int]:
+        discarded_ids: list[int] = []
         while True:
             try:
                 request = self.requests.get_nowait()
             except queue.Empty:
-                return
+                return discarded_ids
             if request is None:
                 self.requests.put_nowait(None)
-                return
+                return discarded_ids
+            discarded_ids.append(request.request_id)
 
     def stop(self, timeout: float = 2.0) -> bool:
         self._stopping.set()
@@ -488,7 +578,7 @@ class ToolTip:
             self.window.overrideredirect(True)
             self.window.attributes("-topmost", True)
             self.window.configure(bg=BORDER_COLOR)
-            label = tk.Label(self.window, text=self.text, bg=TOOLTIP_BACKGROUND_COLOR, fg=PRIMARY_TEXT_COLOR, padx=8,
+            label = tk.Label(self.window, text=self.text, bg=TOOLTIP_BACKGROUND_COLOR, fg=TOOLTIP_TEXT_COLOR, padx=8,
                              pady=5, justify="left", relief="flat", borderwidth=0, font=("Segoe UI", 8), )
             label.pack()
             self.window.update_idletasks()
@@ -558,6 +648,8 @@ class CompactPTZRemote:
         self.opacity_index = 0
         self.speed_mode = "NORMAL"
         self.tooltips_enabled = False
+        self.theme_name = self.load_theme_preference()
+        self._set_palette_globals(DARK_THEME if self.theme_name == "dark" else LIGHT_THEME)
         self.is_compact_mode = False
         self.normal_geometry: str | None = None
         self.configure_window()
@@ -583,6 +675,44 @@ class CompactPTZRemote:
         else:
             directory = Path.home() / "AppData" / "Local" / "PTZRemote"
         return directory / "ptz_presets.json"
+
+    @staticmethod
+    def _settings_file_path() -> Path:
+        base = os.environ.get("LOCALAPPDATA")
+        if base:
+            directory = Path(base) / "PTZRemote"
+        else:
+            directory = Path.home() / "AppData" / "Local" / "PTZRemote"
+        return directory / "settings.json"
+
+    def load_theme_preference(self) -> str:
+        path = self._settings_file_path()
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            theme = data.get("theme", "light")
+            return theme if theme in {"light", "dark"} else "light"
+        except FileNotFoundError:
+            return "light"
+        except (OSError, json.JSONDecodeError, TypeError):
+            logger.exception("Unable to load application settings from %s", path)
+            return "light"
+
+    def save_theme_preference(self) -> None:
+        path = self._settings_file_path()
+        temporary_path = path.with_suffix(".tmp")
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with temporary_path.open("w", encoding="utf-8") as handle:
+                json.dump({"theme": self.theme_name}, handle, indent=2)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_path, path)
+        except OSError:
+            logger.exception("Unable to save application settings to %s", path)
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     @property
     def supported_properties(self) -> set[str]:
@@ -625,6 +755,10 @@ class CompactPTZRemote:
                                     highlightthickness=1, )
         self.outer_frame.pack(fill="both", expand=True)
         self.create_header()
+        # Build compact controls before the normal speed section. The normal
+        # speed section calls update_speed_buttons(), so compact_speed_button
+        # must already refer to the new widget after a theme rebuild.
+        self.create_compact_interface()
         self.content_frame = tk.Frame(self.outer_frame, bg=APP_BACKGROUND_COLOR)
         self.content_frame.pack(fill="both", padx=8, pady=7)
         self.create_camera_row()
@@ -634,7 +768,6 @@ class CompactPTZRemote:
         self.create_preset_section()
         self.create_position_display()
         self.create_log_display()
-        self.create_compact_interface()
 
     def create_header(self) -> None:
         self.header_frame = tk.Frame(self.outer_frame, bg=HEADER_BACKGROUND_COLOR, height=30)
@@ -657,6 +790,9 @@ class CompactPTZRemote:
         self.compact_mode_button.pack(side="right")
         ToolTip(self.compact_mode_button, "Switch to Super Compact Mode")
 
+        self.theme_toggle_button = self.create_header_button("☾", self.toggle_theme, SECONDARY_TEXT_COLOR)
+        self.theme_toggle_button.pack(side="right")
+        ToolTip(self.theme_toggle_button, "Switch to dark theme")
         buttons = (("◐", self.change_opacity, SECONDARY_TEXT_COLOR, "Change window transparency"),
                    ("_", self.minimize_window, SECONDARY_TEXT_COLOR, "Minimize to taskbar"),
                    ("?", self.toggle_tooltips, TOOLTIP_DISABLED_COLOR, "Toggle help tooltips"),)
@@ -685,9 +821,9 @@ class CompactPTZRemote:
         self.camera_combo.bind("<<ComboboxSelected>>", lambda _event: self.camera_selection_changed(), )
         ToolTip(self.camera_combo, "Select the USB camera to control")
         self.connect_button = tk.Button(frame, text="●", command=self.connect_selected_camera, width=3,
-                                        bg=PRIMARY_ACTION_COLOR, fg=PRIMARY_TEXT_COLOR,
+                                        bg=PRIMARY_ACTION_COLOR, fg=ACTION_TEXT_COLOR,
                                         activebackground=PRIMARY_ACTION_PRESSED_COLOR,
-                                        activeforeground=PRIMARY_TEXT_COLOR, relief="flat", borderwidth=0,
+                                        activeforeground=ACTION_TEXT_COLOR, relief="flat", borderwidth=0,
                                         font=("Segoe UI Symbol", 9, "bold"), cursor="hand2", )
         self.connect_button.pack(side="left", padx=(5, 0), ipady=3)
         ToolTip(self.connect_button, "Connect or reconnect selected camera")
@@ -855,7 +991,7 @@ class CompactPTZRemote:
             display_text, tooltip_text = details[code]
             button = tk.Button(frame, text=display_text, command=lambda selected=code: self.set_speed(selected),
                                bg=BUTTON_BACKGROUND_COLOR, fg=SECONDARY_TEXT_COLOR,
-                               activebackground=PRIMARY_ACTION_COLOR, activeforeground=PRIMARY_TEXT_COLOR,
+                               activebackground=PRIMARY_ACTION_COLOR, activeforeground=ACTION_TEXT_COLOR,
                                relief="flat", borderwidth=0, font=("Segoe UI", 7, "bold"), cursor="hand2", )
             button.pack(side="left", fill="x", expand=True, padx=2, ipady=3)
             self.speed_buttons[code] = button
@@ -1024,6 +1160,12 @@ class CompactPTZRemote:
             if self.ranges:
                 self.connection_state = ConnectionState.READY
                 supported = "/".join(name.upper() for name in self.ranges)
+                for property_name, info in self.ranges.items():
+                    logger.info(
+                        "%s range: min=%s max=%s step=%s default=%s current=%s",
+                        property_name.upper(), info.minimum, info.maximum,
+                        info.step, info.default, self.position.get(property_name),
+                    )
                 self.write_log(f"Ready | {supported}", SUCCESS_COLOR)
             else:
                 self.connection_state = ConnectionState.CONNECTED_NO_PTZ
@@ -1061,7 +1203,7 @@ class CompactPTZRemote:
             connect_colour = SUCCESS_COLOR
         elif self.connection_state in {ConnectionState.CONNECTING, ConnectionState.CONNECTED_NO_PTZ, }:
             connect_colour = WARNING_COLOR
-        self.connect_button.config(text="●", bg=connect_colour,
+        self.connect_button.config(text="●", bg=connect_colour, fg=ACTION_TEXT_COLOR,
                                    state="disabled" if self.connection_state == ConnectionState.CONNECTING else "normal", )
         supported = self.supported_properties
         pan_state = "normal" if "pan" in supported else "disabled"
@@ -1107,8 +1249,10 @@ class CompactPTZRemote:
         self.move_pending = True
         generation = self.operation_generation
 
-        def operation() -> int:
-            return self.camera_service.move(action.property_name, action.direction, self.speed_mode)
+        def operation() -> MovementResult:
+            return self.camera_service.move(
+                action.property_name, action.direction, self.speed_mode
+            )
 
         def completed(result: WorkerResult) -> None:
             self.move_pending = False
@@ -1117,11 +1261,27 @@ class CompactPTZRemote:
             if result.error is not None:
                 self.handle_camera_failure("PTZ failed", result.error)
                 return
-            self.position.set(action.property_name, int(result.value))
+            movement: MovementResult = result.value
+            self.position.set(action.property_name, movement.actual_value)
             self.update_position_display()
+            if movement.at_limit or movement.delta == 0:
+                self.stop_hold(action.owner)
+                self.write_log(
+                    f"{action.property_name.title()} limit reached",
+                    WARNING_COLOR,
+                )
+                return
             if self.active_hold is not None:
-                delay = (0 if self.active_hold != action else (
-                    INITIAL_HOLD_DELAY_MS if not self.repeat_started else REPEAT_INTERVAL_MS))
+                if self.active_hold != action:
+                    delay = 0
+                else:
+                    timings = (
+                        ZOOM_HOLD_TIMING_MS
+                        if action.property_name == "zoom"
+                        else PT_HOLD_TIMING_MS
+                    )
+                    timing = timings[self.speed_mode]
+                    delay = timing["repeat"] if self.repeat_started else timing["initial"]
                 self.schedule_job("repeat", delay, self.repeat_movement)
                 self.repeat_started = True
 
@@ -1181,17 +1341,23 @@ class CompactPTZRemote:
             return
         self.speed_mode = speed_code
         self.update_speed_buttons()
-        percent = int(RANGE_SPEED_PERCENT[speed_code] * 100)
-        self.write_log(f"{speed_code.title()} | {percent}% of property range", PRIMARY_TEXT_COLOR)
+        pan_steps = PT_STEP_MULTIPLIERS["pan"][speed_code]
+        tilt_steps = PT_STEP_MULTIPLIERS["tilt"][speed_code]
+        zoom_percent = int(ZOOM_RANGE_PERCENTAGES[speed_code] * 100)
+        self.write_log(
+            f"{speed_code.title()} | Pan {pan_steps}x, Tilt {tilt_steps}x, Zoom {zoom_percent}%",
+            PRIMARY_TEXT_COLOR,
+        )
 
     def update_speed_buttons(self) -> None:
         for code, button in self.speed_buttons.items():
             button.config(bg=PRIMARY_ACTION_COLOR if code == self.speed_mode else BUTTON_BACKGROUND_COLOR,
-                          fg=PRIMARY_TEXT_COLOR if code == self.speed_mode else SECONDARY_TEXT_COLOR, )
+                          fg=ACTION_TEXT_COLOR if code == self.speed_mode else SECONDARY_TEXT_COLOR, )
         compact_codes = {"FINE": "F", "NORMAL": "N", "FAST": "H"}
-        if hasattr(self, "compact_speed_button"):
-            self.compact_speed_button.config(text=compact_codes.get(self.speed_mode, "N"), bg=PRIMARY_ACTION_COLOR,
-                                             fg=PRIMARY_TEXT_COLOR, )
+        compact_button = getattr(self, "compact_speed_button", None)
+        if compact_button is not None and compact_button.winfo_exists():
+            compact_button.config(text=compact_codes.get(self.speed_mode, "N"), bg=PRIMARY_ACTION_COLOR,
+                                  fg=ACTION_TEXT_COLOR, )
 
     def update_position_display(self) -> None:
         def display(value: int | None) -> str:
@@ -1419,7 +1585,11 @@ class CompactPTZRemote:
 
     def invalidate_operations(self) -> None:
         self.operation_generation += 1
-        self.camera_worker.set_generation(self.operation_generation, purge=True)
+        discarded_ids = self.camera_worker.set_generation(
+            self.operation_generation, purge=True
+        )
+        for request_id in discarded_ids:
+            self.callbacks.pop(request_id, None)
         self.move_pending = False
         self.cancel_job("sequence")
         self.cancel_job("connect")
@@ -1444,6 +1614,71 @@ class CompactPTZRemote:
         x_position = max(0, self.root.winfo_screenwidth() - window_width - RIGHT_MARGIN, )
         y_position = max(0, self.root.winfo_screenheight() - window_height - BOTTOM_MARGIN, )
         self.root.geometry(f"{window_width}x{window_height}+{x_position}+{y_position}")
+
+    @staticmethod
+    def _set_palette_globals(palette: dict[str, str]) -> None:
+        global APP_BACKGROUND_COLOR, HEADER_BACKGROUND_COLOR, SECTION_BACKGROUND_COLOR
+        global BUTTON_BACKGROUND_COLOR, BUTTON_HOVER_COLOR, PRIMARY_ACTION_COLOR
+        global PRIMARY_ACTION_PRESSED_COLOR, BORDER_COLOR, PRIMARY_TEXT_COLOR
+        global ACTION_TEXT_COLOR, SECONDARY_TEXT_COLOR, DISABLED_TEXT_COLOR
+        global SUCCESS_COLOR, WARNING_COLOR, ERROR_COLOR, INFORMATION_COLOR
+        global CLOSE_HOVER_COLOR, SAVED_PRESET_COLOR, PRESET_SAVE_MODE_COLOR
+        global TOOLTIP_BACKGROUND_COLOR, TOOLTIP_TEXT_COLOR
+        global TOOLTIP_ENABLED_COLOR, TOOLTIP_DISABLED_COLOR
+        APP_BACKGROUND_COLOR = palette["app_bg"]
+        HEADER_BACKGROUND_COLOR = palette["header_bg"]
+        SECTION_BACKGROUND_COLOR = palette["section_bg"]
+        BUTTON_BACKGROUND_COLOR = palette["button_bg"]
+        BUTTON_HOVER_COLOR = palette["button_hover"]
+        PRIMARY_ACTION_COLOR = palette["primary_action"]
+        PRIMARY_ACTION_PRESSED_COLOR = palette["primary_action_pressed"]
+        BORDER_COLOR = palette["border"]
+        PRIMARY_TEXT_COLOR = palette["primary_text"]
+        ACTION_TEXT_COLOR = palette["action_text"]
+        SECONDARY_TEXT_COLOR = palette["secondary_text"]
+        DISABLED_TEXT_COLOR = palette["disabled_text"]
+        SUCCESS_COLOR = palette["success"]
+        WARNING_COLOR = palette["warning"]
+        ERROR_COLOR = palette["error"]
+        INFORMATION_COLOR = palette["information"]
+        CLOSE_HOVER_COLOR = palette["close_hover"]
+        SAVED_PRESET_COLOR = palette["saved_preset"]
+        PRESET_SAVE_MODE_COLOR = palette["preset_save"]
+        TOOLTIP_BACKGROUND_COLOR = palette["tooltip_bg"]
+        TOOLTIP_TEXT_COLOR = palette["tooltip_text"]
+        TOOLTIP_ENABLED_COLOR = INFORMATION_COLOR
+        TOOLTIP_DISABLED_COLOR = DISABLED_TEXT_COLOR
+
+    def toggle_theme(self) -> None:
+        target = "dark" if self.theme_name == "light" else "light"
+        self.apply_theme(target)
+        self.write_log(f"{target.title()} theme enabled", INFORMATION_COLOR)
+
+    def apply_theme(self, theme_name: str) -> None:
+        if theme_name not in {"light", "dark"} or theme_name == self.theme_name:
+            return
+
+        # Rebuild the widgets instead of trying to recolour them in place. Tk and
+        # ttk cache colours differently, and in-place updates leave stale white
+        # section frames on some Windows/Tk versions. Rebuilding is deterministic.
+        was_compact = self.is_compact_mode
+        self.is_compact_mode = False
+        self.theme_name = theme_name
+        palette = DARK_THEME if theme_name == "dark" else LIGHT_THEME
+        self._set_palette_globals(palette)
+        self.save_theme_preference()
+
+        if hasattr(self, "outer_frame") and self.outer_frame.winfo_exists():
+            self.outer_frame.destroy()
+        self.configure_window()
+        self.configure_styles()
+        self.create_interface()
+        self.render_state()
+        self.update_speed_buttons()
+        self.root.update_idletasks()
+
+        if was_compact:
+            self.show_compact_mode()
 
     def toggle_tooltips(self) -> None:
         self.tooltips_enabled = not self.tooltips_enabled
