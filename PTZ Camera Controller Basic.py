@@ -20,7 +20,7 @@ try:
 except ImportError:
     duvc = None
 
-# Theme palettes. The dark palette deliberately uses layered blue-grey surfaces
+# Theme palettes. The dark palette deliberately uses layered blue-grey surfaces Kalpesh
 # rather than pure black, which keeps the compact utility readable and less harsh.
 LIGHT_THEME: Final = {
     "app_bg": "#F3F6FA", "header_bg": "#E7EEF7", "section_bg": "#FFFFFF",
