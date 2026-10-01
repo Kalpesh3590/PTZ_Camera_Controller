@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import queue
+import subprocess
 import threading
 import time
 import tkinter as tk
@@ -13,26 +14,29 @@ from enum import Enum, auto
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from tkinter import messagebox, ttk
+from types import SimpleNamespace
 from typing import Any, Callable, Final, Literal
 
 try:
     import duvc_ctl as duvc
 except ImportError:
     duvc = None
-LIGHT_THEME: Final = {'app_bg': '#F3F6FA', 'header_bg': '#E7EEF7', 'section_bg': '#FFFFFF', 'button_bg': '#E8EEF5',
-                      'button_hover': '#D6E4F5', 'primary_action': '#2563EB', 'primary_action_pressed': '#1D4ED8',
-                      'border': '#CBD5E1', 'primary_text': '#172033', 'action_text': '#FFFFFF',
-                      'secondary_text': '#526277', 'disabled_text': '#94A3B8', 'success': '#15803D',
-                      'warning': '#B45309', 'error': '#B91C1C', 'information': '#0369A1', 'close_hover': '#DC2626',
-                      'saved_preset': '#16A34A', 'preset_save': '#D97706', 'tooltip_bg': '#172033',
-                      'tooltip_text': '#F8FAFC'}
-DARK_THEME: Final = {'app_bg': '#18212F', 'header_bg': '#222E3E', 'section_bg': '#263446', 'button_bg': '#314156',
-                     'button_hover': '#3D5068', 'primary_action': '#4F8EF7', 'primary_action_pressed': '#3B76D9',
-                     'border': '#43546B', 'primary_text': '#EDF3FA', 'action_text': '#FFFFFF',
-                     'secondary_text': '#B6C3D3', 'disabled_text': '#718096', 'success': '#4ADE80',
-                     'warning': '#FBBF24', 'error': '#FB7185', 'information': '#60A5FA', 'close_hover': '#E05263',
-                     'saved_preset': '#22C55E', 'preset_save': '#F59E0B', 'tooltip_bg': '#101722',
-                     'tooltip_text': '#F8FAFC'}
+
+LIGHT_THEME: Final = {'app_bg': '#D9DEE5', 'header_bg': '#C4CBD4', 'section_bg': '#F7F8FA', 'button_bg': '#D2D9E2',
+                      'button_hover': '#BAC5D2', 'primary_action': '#005A9E', 'primary_action_pressed': '#004578',
+                      'border': '#66717D', 'primary_text': '#101820', 'action_text': '#FFFFFF',
+                      'secondary_text': '#303B47', 'disabled_text': '#687482', 'success': '#107C10',
+                      'warning': '#8A4B00', 'error': '#B42318', 'information': '#005A9E', 'close_hover': '#C50F1F',
+                      'saved_preset': '#9EDBAA', 'preset_save': '#F4C978', 'tooltip_bg': '#202124',
+                      'tooltip_text': '#FFFFFF'}
+DARK_THEME: Final = {'app_bg': '#17191C', 'header_bg': '#202327', 'section_bg': '#292D32', 'button_bg': '#363B42',
+                     'button_hover': '#4A515B', 'primary_action': '#236FBA', 'primary_action_pressed': '#185A96',
+                     'border': '#737C87', 'primary_text': '#F5F7FA', 'action_text': '#FFFFFF',
+                     'secondary_text': '#C7CDD5', 'disabled_text': '#929BA6', 'success': '#62D879',
+                     'warning': '#FFC857', 'error': '#FF7373', 'information': '#70B7FF', 'close_hover': '#D13438',
+                     'saved_preset': '#166B32', 'preset_save': '#7A4600', 'tooltip_bg': '#F5F7FA',
+                     'tooltip_text': '#17191C'}
+
 APP_BACKGROUND_COLOR = LIGHT_THEME['app_bg']
 HEADER_BACKGROUND_COLOR = LIGHT_THEME['header_bg']
 SECTION_BACKGROUND_COLOR = LIGHT_THEME['section_bg']
@@ -58,7 +62,7 @@ TOOLTIP_ENABLED_COLOR = INFORMATION_COLOR
 TOOLTIP_DISABLED_COLOR = DISABLED_TEXT_COLOR
 APP_TITLE: Final = 'PTZ Remote'
 DEFAULT_OPACITY: Final = 1.0
-OPACITY_VALUES: Final = (1.0, 0.85, 0.7, 0.55, 0.4, 0.3, 0.2)
+OPACITY_VALUES: Final = (1.0, 0.5, 0.2)
 POSITION_REFRESH_DELAY_MS: Final = 300
 PRESET_COMMAND_DELAY_MS: Final = 100
 WORKER_POLL_INTERVAL_MS: Final = 30
@@ -78,16 +82,6 @@ PT_HOLD_TIMING_MS: Final = {'FINE': {'initial': 300, 'repeat': 180}, 'NORMAL': {
                             'FAST': {'initial': 160, 'repeat': 65}}
 ZOOM_HOLD_TIMING_MS: Final = {'FINE': {'initial': 250, 'repeat': 120}, 'NORMAL': {'initial': 180, 'repeat': 75},
                               'FAST': {'initial': 120, 'repeat': 45}}
-EXTRA_SMALL_SPACING: Final = 3
-SMALL_SPACING: Final = 5
-MEDIUM_SPACING: Final = 8
-SECTION_PADDING: Final = 8
-CONTROL_HEIGHT: Final = 28
-UI_WIDTH: Final = 328
-UI_FONT: Final = ('Segoe UI', 9)
-SMALL_FONT: Final = ('Segoe UI', 8)
-BOLD_FONT: Final = ('Segoe UI', 9, 'bold')
-TITLE_FONT: Final = ('Segoe UI Semibold', 10)
 logger = logging.getLogger(__name__)
 
 
@@ -680,7 +674,6 @@ class CompactPTZRemote:
         self.theme_name = self.load_theme_preference()
         self._set_palette_globals(DARK_THEME if self.theme_name == 'dark' else LIGHT_THEME)
         self.is_compact_mode = False
-        self.normal_geometry: str | None = None
         self.configure_window()
         self.configure_styles()
         self.create_interface()
@@ -692,6 +685,7 @@ class CompactPTZRemote:
         self.root.bind('<FocusOut>', self.focus_lost, add='+')
         self.root.bind_all('<KeyPress>', self.keyboard_pressed, add='+')
         self.root.bind_all('<KeyRelease>', self.keyboard_released, add='+')
+        self.root.bind_all('<ButtonPress-1>', self.pointer_pressed, add='+')
         self.schedule_job('worker', WORKER_POLL_INTERVAL_MS, self.poll_worker)
         self.schedule_job('refresh', 200, self.refresh_cameras)
         self.schedule_job('placement', 500, self.place_bottom_right)
@@ -813,7 +807,7 @@ class CompactPTZRemote:
         close_button.config(activebackground=CLOSE_HOVER_COLOR, activeforeground=PRIMARY_TEXT_COLOR)
         close_button.pack(side='right', padx=(0, 2))
         ToolTip(close_button, 'Close PTZ utility')
-        self.compact_mode_button = self.create_header_button('▭', self.show_compact_mode, SECONDARY_TEXT_COLOR)
+        self.compact_mode_button = self.create_header_button('▰', self.show_compact_mode, SECONDARY_TEXT_COLOR)
         self.compact_mode_button.pack(side='right')
         ToolTip(self.compact_mode_button, 'Switch to Super Compact Mode')
         self.theme_toggle_button = self.create_header_button('☾', self.toggle_theme, SECONDARY_TEXT_COLOR)
@@ -832,8 +826,8 @@ class CompactPTZRemote:
             widget.bind('<ButtonPress-1>', self.start_drag)
             widget.bind('<B1-Motion>', self.drag_window)
         ToolTip(self.title_label,
-                'Designed by Pragati Shelar\nDemo contact: +91 00000 00001\n\nDeveloped by Kalpesh Kashivale\nDemo contact: +91 00000 00002',
-                delay=5000, always_enabled=True, placement='window_top')
+                'Designed by Pragati Shelar\nContact: +91 00000 00001\n\nDeveloped by Kalpesh Kashivale\nContact: +91 00000 00002',
+                delay=2000, always_enabled=True, placement='window_top')
 
     def create_header_button(self, text: str, command: Callable[[], None], foreground: str) -> tk.Button:
         return tk.Button(self.header_frame, text=text, command=command, width=2, bg=HEADER_BACKGROUND_COLOR,
@@ -843,10 +837,11 @@ class CompactPTZRemote:
     def create_camera_row(self) -> None:
         frame = tk.Frame(self.content_frame, bg=APP_BACKGROUND_COLOR)
         frame.pack(fill='x', pady=(0, 5))
-        self.camera_combo = ttk.Combobox(frame, state='readonly', width=25, style='Compact.TCombobox',
+        self.camera_combo = ttk.Combobox(frame, state='readonly', width=20, style='Compact.TCombobox',
                                          font=('Segoe UI', 8))
         self.camera_combo.pack(side='left', fill='x', expand=True)
         self.camera_combo.bind('<<ComboboxSelected>>', lambda _event: self.camera_selection_changed())
+        self.camera_combo.bind('<KeyPress>', self.camera_combo_key_pressed, add='+')
         ToolTip(self.camera_combo, 'Select the USB camera to control')
         self.connect_button = tk.Button(frame, text='●', command=self.connect_selected_camera, width=3,
                                         bg=PRIMARY_ACTION_COLOR, fg=ACTION_TEXT_COLOR,
@@ -862,6 +857,41 @@ class CompactPTZRemote:
                                         cursor='hand2')
         self.refresh_button.pack(side='left', padx=(4, 0), ipady=3)
         ToolTip(self.refresh_button, 'Refresh USB camera list')
+        self.camera_preview_button = tk.Button(
+            frame, text='▣', command=self.open_windows_camera, width=3,
+            bg=BUTTON_BACKGROUND_COLOR, fg=PRIMARY_TEXT_COLOR,
+            activebackground=BUTTON_HOVER_COLOR, activeforeground=PRIMARY_TEXT_COLOR,
+            relief='flat', borderwidth=0, font=('Segoe UI Symbol', 10, 'bold'),
+            cursor='hand2'
+        )
+        self.camera_preview_button.pack(side='left', padx=(4, 0), ipady=3)
+        ToolTip(self.camera_preview_button, 'Open the Windows Camera app')
+
+    def open_windows_camera(self) -> None:
+        """Open the standard Windows Camera app without blocking the Tkinter UI."""
+        if self.is_closing:
+            return
+        if os.name != 'nt':
+            self.write_log('Windows Camera is available on Windows only', ERROR_COLOR)
+            return
+        self.stop_hold()
+        try:
+            getattr(os, 'startfile')('microsoft.windows.camera:')
+            self.write_log('Windows Camera opened', SUCCESS_COLOR)
+        except OSError as primary_error:
+            logger.warning('Camera URI launch failed: %s', primary_error)
+            try:
+                subprocess.Popen(
+                    [
+                        'explorer.exe',
+                        r'shell:AppsFolder\Microsoft.WindowsCamera_8wekyb3d8bbwe!App',
+                    ],
+                    close_fds=True,
+                )
+                self.write_log('Windows Camera opened', SUCCESS_COLOR)
+            except OSError as fallback_error:
+                logger.exception('Unable to open Windows Camera')
+                self.write_log(f'Unable to open Windows Camera: {fallback_error}', ERROR_COLOR)
 
     def create_compact_interface(self) -> None:
         self.compact_frame = tk.Frame(self.outer_frame, bg=HEADER_BACKGROUND_COLOR, highlightbackground=BORDER_COLOR,
@@ -1143,6 +1173,33 @@ class CompactPTZRemote:
                 best_score = score
         return best_index
 
+    def pointer_pressed(self, event: tk.Event) -> None:
+        if self.is_closing:
+            return
+        clicked_widget = getattr(event, 'widget', None)
+        clicked_path = str(clicked_widget).casefold()
+        combo_path = str(self.camera_combo).casefold()
+        if clicked_path == combo_path or 'combobox.popdown' in clicked_path:
+            return
+        try:
+            focused_widget = self.root.focus_get()
+        except tk.TclError:
+            focused_widget = None
+        focused_path = str(focused_widget).casefold() if focused_widget is not None else ''
+        if focused_path == combo_path or 'combobox' in focused_path or 'popdown' in focused_path:
+            self.root.after_idle(self.restore_shortcut_focus)
+
+    def camera_combo_key_pressed(self, event: tk.Event) -> str | None:
+        if self.camera_dropdown_is_open():
+            return None
+        redirected_event = SimpleNamespace(
+            widget=self.root,
+            keysym=event.keysym,
+            state=event.state,
+        )
+        result = self.keyboard_pressed(redirected_event)
+        return result if result is not None else 'break'
+
     def camera_selection_changed(self) -> None:
         self.stop_hold()
         self.invalidate_operations()
@@ -1150,6 +1207,48 @@ class CompactPTZRemote:
         self.render_state()
         self.write_log('Connecting selected camera...', WARNING_COLOR)
         self.schedule_job('connect', 100, self.connect_selected_camera)
+        self.root.after(150, self.restore_shortcut_focus)
+
+    def restore_shortcut_focus(self) -> None:
+        if self.is_closing:
+            return
+        try:
+            self.root.focus_force()
+        except tk.TclError:
+            pass
+
+    def camera_dropdown_is_open(self) -> bool:
+        try:
+            popdown = self.root.tk.call('ttk::combobox::PopdownWindow', str(self.camera_combo))
+            return bool(int(self.root.tk.call('winfo', 'ismapped', popdown)))
+        except (tk.TclError, AttributeError, TypeError, ValueError):
+            return False
+
+    def keyboard_input_is_reserved(self, event: tk.Event) -> bool:
+        try:
+            if self.camera_dropdown_is_open():
+                return True
+        except (tk.TclError, AttributeError, TypeError, ValueError):
+            return True
+        widget = getattr(event, 'widget', None)
+        if widget is None:
+            return False
+        if isinstance(widget, str):
+            widget_path = widget.casefold()
+            return 'combobox' in widget_path or 'popdown' in widget_path or 'listbox' in widget_path
+        if isinstance(widget, (ttk.Combobox, tk.Entry, tk.Text, tk.Listbox)):
+            return True
+        try:
+            widget_path = str(widget).casefold()
+            if 'combobox' in widget_path or 'popdown' in widget_path or 'listbox' in widget_path:
+                return True
+            winfo_class = getattr(widget, 'winfo_class', None)
+            if not callable(winfo_class):
+                return False
+            widget_class = str(winfo_class()).casefold()
+            return any(name in widget_class for name in ('combobox', 'listbox', 'entry', 'text'))
+        except (tk.TclError, AttributeError, TypeError, ValueError):
+            return True
 
     def connect_selected_camera(self) -> None:
         if self.is_closing:
@@ -1557,7 +1656,7 @@ class CompactPTZRemote:
                 'Page_Down': ('zoom', -1)}.get(keysym)
 
     def keyboard_pressed(self, event: tk.Event) -> str | None:
-        if isinstance(event.widget, (ttk.Combobox, tk.Entry, tk.Text)):
+        if self.keyboard_input_is_reserved(event):
             return None
         key = event.keysym
         lower = key.lower()
