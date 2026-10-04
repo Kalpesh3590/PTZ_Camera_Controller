@@ -826,7 +826,7 @@ class CompactPTZRemote:
             widget.bind('<ButtonPress-1>', self.start_drag)
             widget.bind('<B1-Motion>', self.drag_window)
         ToolTip(self.title_label,
-                'Designed by Pragati Shelar\nContact: +91 00000 00001\n\nDeveloped by Kalpesh Kashivale\nContact: +91 00000 00002',
+                'Designed & Developed by Kalpesh Kashivale\nContact: +91 7709763279\nEmail: kalpeshkashiwale@gmail.com',
                 delay=2000, always_enabled=True, placement='window_top')
 
     def create_header_button(self, text: str, command: Callable[[], None], foreground: str) -> tk.Button:
