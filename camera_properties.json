@@ -1,0 +1,177 @@
+[
+  {
+    "device_index": 0,
+    "camera_name": "HP 5MP Camera",
+    "device_identifier": "\\\\?\\usb#vid_05c8&pid_0834&mi_00#7&ae6f05b&1&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global",
+    "supported_properties": {
+      "camera": [
+        "exposure",
+        "privacy",
+        "digital_zoom"
+      ],
+      "video": [
+        "brightness",
+        "contrast",
+        "hue",
+        "saturation",
+        "sharpness",
+        "gamma",
+        "white_balance",
+        "video_backlight_compensation",
+        "gain",
+        "power_line_frequency"
+      ]
+    },
+    "properties": {
+      "camera": {
+        "exposure": {
+          "current_value": -5,
+          "range": {
+            "min": -8,
+            "max": 0,
+            "step": 1,
+            "default": 0
+          },
+          "value_error": null,
+          "range_error": null
+        },
+        "privacy": {
+          "current_value": false,
+          "range": {
+            "min": 0,
+            "max": 1,
+            "step": 1,
+            "default": 0
+          },
+          "value_error": null,
+          "range_error": null
+        },
+        "digital_zoom": {
+          "current_value": 1,
+          "range": {
+            "min": 0,
+            "max": 0,
+            "step": 0,
+            "default": 0
+          },
+          "value_error": null,
+          "range_error": null
+        }
+      },
+      "video": {
+        "brightness": {
+          "current_value": 0,
+          "range": {
+            "min": -64,
+            "max": 64,
+            "step": 1,
+            "default": 0
+          },
+          "value_error": null,
+          "range_error": null
+        },
+        "contrast": {
+          "current_value": 32,
+          "range": {
+            "min": 0,
+            "max": 64,
+            "step": 1,
+            "default": 0
+          },
+          "value_error": null,
+          "range_error": null
+        },
+        "hue": {
+          "current_value": 0,
+          "range": {
+            "min": -40,
+            "max": 40,
+            "step": 1,
+            "default": 0
+          },
+          "value_error": null,
+          "range_error": null
+        },
+        "saturation": {
+          "current_value": 64,
+          "range": {
+            "min": 0,
+            "max": 128,
+            "step": 1,
+            "default": 0
+          },
+          "value_error": null,
+          "range_error": null
+        },
+        "sharpness": {
+          "current_value": 0,
+          "range": {
+            "min": 0,
+            "max": 5,
+            "step": 1,
+            "default": 0
+          },
+          "value_error": null,
+          "range_error": null
+        },
+        "gamma": {
+          "current_value": 100,
+          "range": {
+            "min": 72,
+            "max": 500,
+            "step": 1,
+            "default": 0
+          },
+          "value_error": null,
+          "range_error": null
+        },
+        "white_balance": {
+          "current_value": 4000,
+          "range": {
+            "min": 2800,
+            "max": 6500,
+            "step": 1,
+            "default": 0
+          },
+          "value_error": null,
+          "range_error": null
+        },
+        "video_backlight_compensation": {
+          "current_value": 0,
+          "range": {
+            "min": 0,
+            "max": 1,
+            "step": 1,
+            "default": 0
+          },
+          "value_error": null,
+          "range_error": null
+        },
+        "gain": {
+          "current_value": 0,
+          "range": {
+            "min": 0,
+            "max": 4,
+            "step": 1,
+            "default": 0
+          },
+          "value_error": null,
+          "range_error": null
+        },
+        "power_line_frequency": {
+          "current_value": 2,
+          "range": {
+            "min": 0,
+            "max": 2,
+            "step": 1,
+            "default": 0
+          },
+          "value_error": null,
+          "range_error": null
+        }
+      }
+    },
+    "camera_error": null,
+    "close_error": null
+  }
+]
